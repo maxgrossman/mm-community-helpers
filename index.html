@@ -13,13 +13,12 @@
   <body>
     <div class="row">
       <div class="columns">
-        <h1>Hello, world! <i class="fa fa-sun-o" aria-hidden="true"></i></h1>
+        <h2>Mapathon Support</h2>
       </div>
     </div>
 
     <div class="row">
       <div class="small-12 medium-offset-1 medium-10 large-offset-2 large-8">
-        <!-- geo search https://github.com/smeijer/leaflet-geosearch -->
         <div id="map"></div>
       </div>
     </div>
@@ -29,14 +28,22 @@
     <div class="row">
       <div class="small-12 medium-offset-1 medium-10 large-offset-2 large-8">
           <div class="row">
-            <div class="small-3 columns">
-              <label for="right-label" class="text-right middle">Filter by a language</label>
+            <div class="small-6 medium-offset-1 medium-5 columns">
+              <label>Filter by a language
+                <select id="language-filter">
+                  <option value="all">All</option>
+                  <!-- ... -->
+                </select>
+              </label>
             </div>
-            <div class="small-9 columns">
-              <select id="language-filter" style="width:auto;">
-                <option value="all">All</option>
-                <!-- ... -->
-              </select>
+            <div class="small-6 medium-5 end columns">
+              <label>Filter by type
+                <select id="type-filter">
+                  <option value="all">All</option>
+                  <option value="Remote">Remote</option>
+                  <option value="In Person">In Person</option>
+                </select>
+              </label>
             </div>
           </div>
       </div>
@@ -44,9 +51,15 @@
 
     <br>
 
-    <div id="contact-cards" class="row small-up-2 medium-up-3 large-up-4" >
+    <div id="contact-cards" class="row small-up-2 medium-up-3 large-up-4" data-equalize-by-row="true" data-equalizer>
       <!-- ... -->
     </div>
+    <div id="no-match" style="display:none;" class="row">
+      <div class="columns text-center">
+        <p> No one matches your location and filter criteria.<br>Try changing your filters or zooming out the map.</p>
+      </div>
+    </div>
+
 
 
 

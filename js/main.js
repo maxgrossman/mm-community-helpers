@@ -1,37 +1,53 @@
-var contactIconHtml = function(type) {
-  switch(type) {
+var contactHtml = function(type, contact) {
+  var check = type.toLowerCase();
+  switch(check) {
     case 'twitter':
-      return '<i class="fa fa-fw fa-twitter" aria-hidden="true"></i>';
+      return '<i class="fa fa-fw fa-twitter" aria-hidden="true"></i><a target="_blank" href="https://twitter.com/' + contact + '">&nbsp; ' + contact + '</a>';
       break;
     case 'email':
-      return '<i class="fa fa-fw fa-envelope" aria-hidden="true"></i>';
-      break;
-    case 'osm':
-      return '<i class="fa fa-fw fa-user-circle" aria-hidden="true"></i>';
+      return '<i class="fa fa-fw fa-envelope" aria-hidden="true"></i><a href="mailto:' + contact + '">&nbsp; ' + contact + '</a>';
       break;
     case 'phone':
-      return '<i class="fa fa-fw fa-phone" aria-hidden="true"></i>';
+      return '<i class="fa fa-fw fa-phone" aria-hidden="true"></i>&nbsp; ' + contact;
       break;
     default:
-      return '<i class="fa fa-fw fa-address-card" aria-hidden="true"></i>';
+      return '<i class="fa fa-fw fa-address-card" aria-hidden="true"></i>&nbsp; ' + contact;
   }
 }
 
+var osmHtml = function(username) {
+  return '<a target="_blank" href="http://www.openstreetmap.org/user/' + username + '"><i class="fa fa-fw fa-user-circle-o" aria-hidden="true"></i></a>';
+}
+
+
 // get the contact data from the google spreadhsheet
-var publicSpreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1qfg5ECN7IMYk8ftCzYL4tTZChYIDVXbFdhnXtwpRzqI/pub?gid=0&single=true&output=csv';
+var publicSpreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1qoR_KMklECFeAteciaNVKmOShS0yh77XMSmhi0TATl4/pubhtml?gid=115773225&single=true';
 function init() {
   Tabletop.init( { key: publicSpreadsheetUrl,
                    callback: showInfo,
                    simpleSheet: true } )
 }
 
+var nameKey = 'Name';
+var methodKey = 'Contact method';
+var contactKey = 'Contact details';
+var osmKey = 'OSM username';
+var languageKey = 'Languages';
+var supportKey = 'Support type';
+var locationKey = 'Location';
+var noteKey = 'Notes';
+
+function supportClass(value) {
+  if(value == 'Remote') { return 'remote'; }
+  if(value == 'In Person') { return 'in-person'; }
+}
 
 function showInfo(data, tabletop) {
   validMarkers = [];
   allLanguages = [];
   // add a LatLng object and an ID to each item in the dataset
   data.forEach(function(d, i) {
-    var coordinates = d.coordinates.replace(/\s/g,'').split('/');
+    var coordinates = d[locationKey].replace(/\s/g,'').split('/');
     // TODO: improve the process for confirming a valid latLng
     if(coordinates.length == 2) {
       coordinates[0] = parseFloat(coordinates[0])
@@ -39,9 +55,9 @@ function showInfo(data, tabletop) {
       if(!isNaN(coordinates[0]) && !isNaN(coordinates[1])) {
         d.LatLng = new L.LatLng(parseFloat(coordinates[0]), parseFloat(coordinates[1]));
         d.id = i;
-        d.languages = d.languages.replace(/\s/g,'').split(';');
-        validMarkers.push(d)
-        $.each(d.languages, function(i,lang){
+        d[languageKey] = d[languageKey].replace(/\s/g,'').split(';');
+        validMarkers.push(d);
+        $.each(d[languageKey], function(i,lang){
           if($.inArray(lang, allLanguages) == -1) { allLanguages.push(lang); }
         });
       }
@@ -56,7 +72,7 @@ function showInfo(data, tabletop) {
 
 
 
-  map = L.map('map').setView([0, 0], 2);
+  map = L.map('map', { maxZoom: 13}).setView([0, 0], 2);
 
   // L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
   //     attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
@@ -72,13 +88,28 @@ function showInfo(data, tabletop) {
   var svg = d3.select('#map').select('svg');
   markersGroup = svg.append('g').attr('id', 'markers').attr('class', 'leaflet-zoom-hide');
 
+
+
   // add markers to the map for each contact
   mappedContacts = d3.select('svg #markers').selectAll('text').data(validMarkers)
     .enter().append('text')
-    .attr('class', 'mapmarker')
     .text('\uf276')
     .attr('font-family', 'FontAwesome')
-    .attr('class', function(d) { return 'help_' + d.help_type; });
+    .attr('class', function(d) { return 'help_' + supportClass(d[supportKey]); })
+    .classed('mapmarker', true)
+    .on('click', function(d) {
+      var lang = [];
+      $.each(d[languageKey], function(i, item){ lang.push(languageLookup[item]); });
+      var htmlpop = '<div><b>' + d[nameKey] + '</b></div>' +
+          '<div>' +
+            contactHtml(d[methodKey], d[contactKey]) + '</br>' +
+            lang.join('; ') +
+          '</div>';
+      var popup = L.popup({closeOnClick: false})
+        .setLatLng(d.LatLng)
+        .setContent(htmlpop)
+        .openOn(map);
+    });
 
   // when map view changes adjust the locations of the svg circles
   updatemarker = function() {
@@ -98,16 +129,27 @@ function showInfo(data, tabletop) {
     });
 
     var language = $('#language-filter').find(':selected').val();
+    var type = $('#type-filter').find(':selected').val();
     if(language !== 'all') {
       filteredData = filteredData.filter(function(d) {
-        return ($.inArray(language, d.languages) !== -1);
+        return ($.inArray(language, d[languageKey]) !== -1);
       });
     }
-    toggleMarkerVis(language);
+    if(type !== 'all') {
+      filteredData = filteredData.filter(function(d) {
+        return d[supportKey] == type;
+      });
+    }
+    toggleMarkerVis(language, type);
     drawCards(filteredData);
   }
 
   drawCards = function(list) {
+    if(list.length == 0){
+      $('#no-match').show();
+    } else {
+      $('#no-match').hide();
+    }
     var contactCards = d3.select('#contact-cards').selectAll('div.column').data(list, function(d) { return d.id; });
     // no UPDATE
     // ENTER
@@ -115,13 +157,14 @@ function showInfo(data, tabletop) {
         .attr('class', 'column')
         .html(function(d) {
             var lang = [];
-            $.each(d.languages, function(i, item){ lang.push(languageLookup[item]); });
+            $.each(d[languageKey], function(i, item){ lang.push(languageLookup[item]); });
             var html = '<div class="card" data-equalizer-watch>' +
                   '<div class="card-section">' +
-                    '<h5>' + d.name + '</h5>' +
-                    '<p><small><span class="help_' + d.help_type + '">' + d.help_type + '</span><br>' +
-                    contactIconHtml(d.primary_type) + ' ' + d.primary_contact  + '</br>' +
-                    lang.join('; ') +
+                    '<h5>' + osmHtml(d[osmKey]) + '&nbsp; ' + d[nameKey] + '</h5>' +
+                    '<p><small><span class="help_' + supportClass(d[supportKey]) + '">' + d[supportKey] + '</span><br>' +
+                    contactHtml(d[methodKey], d[contactKey])  + '</br>' +
+                    d[noteKey] + '<br>' +
+                    '<i class="fa fa-fw fa-language" aria-hidden="true"></i>&nbsp; ' + lang.join('; ') +
                     '</small></p>' +
                   '</div>' +
                 '</div>';
@@ -129,11 +172,15 @@ function showInfo(data, tabletop) {
           })
     // EXIT
     contactCards.exit().remove();
+
+    $('#contact-cards').foundation('destroy');
+    new Foundation.Equalizer($('#contact-cards'));
+
   }
 
-  toggleMarkerVis = function(language) {
+  toggleMarkerVis = function(language, type) {
     mappedContacts.each(function(d) {
-      if( ($.inArray(language, d.languages) !== -1) || (language == 'all') ){
+      if( (($.inArray(language, d[languageKey]) !== -1) || (language == 'all')) && ( (d[supportKey] == type) || (type == 'all'))   ){
         d3.select(this).classed('no-language', false);
       } else {
         d3.select(this).classed('no-language', true);
@@ -152,12 +199,14 @@ map.on('zoom move viewreset', updatemarker);
 $('#language-filter').change(function(){
   filter();
 })
+$('#type-filter').change(function(){
+  filter();
+})
 
 filter();
 
 
-// d3.select('#contact-cards').property('data-equalizer', true).attr('data-equalize-by-row','true')
-// new Foundation.Equalizer($('#contact-cards'));
+
 
 
 }
